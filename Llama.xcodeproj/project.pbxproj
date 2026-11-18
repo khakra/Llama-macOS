@@ -325,8 +325,7 @@
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				URL_SCHEME = "llama-dev";
-				URL_SCHEME_ALT = "llamabarn-dev";
+				URL_SCHEME = "localchat-dev";
 			};
 			name = Debug;
 		};
@@ -360,8 +359,7 @@
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				URL_SCHEME = llama;
-				URL_SCHEME_ALT = llamabarn;
+				URL_SCHEME = localchat;
 			};
 			name = Release;
 		};

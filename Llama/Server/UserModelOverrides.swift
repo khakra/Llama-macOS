@@ -29,7 +29,7 @@ enum UserModelOverrides {
   /// is worse than one more directory.
   static var configDir: URL {
     URL(fileURLWithPath: NSHomeDirectory())
-      .appendingPathComponent(".config/llama", isDirectory: true)
+      .appendingPathComponent(".config/localchat", isDirectory: true)  // FORK: our own config dir
   }
 
   static var fileURL: URL {

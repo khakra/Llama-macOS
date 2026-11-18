@@ -441,7 +441,7 @@ enum UserSettings {
   /// orphaned; models.ini is regenerated from the cache scan, so nothing's lost.)
   static let appSupportDir: URL = {
     let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("Llama", isDirectory: true)
+      .appendingPathComponent("LocalChat", isDirectory: true)  // FORK: our own data dir, not upstream Llama's
     if !FileManager.default.fileExists(atPath: dir.path) {
       try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }

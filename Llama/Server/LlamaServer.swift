@@ -437,7 +437,7 @@ class LlamaServer {
   /// current server session.
   nonisolated static let logFilePath = FileManager.default
     .urls(for: .libraryDirectory, in: .userDomainMask)[0]
-    .appendingPathComponent("Logs/Llama/llama-server.log").path
+    .appendingPathComponent("Logs/LocalChat/llama-server.log").path  // FORK: our own log dir
 
   /// The addresses the server binds for a network bind address. Shared by
   /// the `--host` argument (which renders them comma-joined) and

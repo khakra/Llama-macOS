@@ -10,11 +10,11 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>app.llama.install</string>
+			<string>app.localchat.install</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<!-- FORK: one scheme (localchat / localchat-dev); upstream's llamabarn alias dropped -->
 				<string>$(URL_SCHEME)</string>
-				<string>$(URL_SCHEME_ALT)</string>
 			</array>
 		</dict>
 	</array>

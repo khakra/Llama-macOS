@@ -54,7 +54,7 @@ enum LlamaBinaries {
   /// its copy on PATH wins and this path goes unused -- unless that copy falls
   /// behind the pin, in which case the app falls back here and updates it.
   static let managedPath: String =
-    (NSHomeDirectory() as NSString).appendingPathComponent(".llama-app/llama")
+    (NSHomeDirectory() as NSString).appendingPathComponent(".localchat/llama")  // FORK: own engine dir, so upstream Llama's app can't change our pinned engine
 
   /// The `llama` on PATH. Either a real file (a copy from `install.sh`, which
   /// the app uses first) or a symlink (the one the app creates to its own
