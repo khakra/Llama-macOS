@@ -326,6 +326,8 @@ struct SettingsSidebar: View {
       // from the same list machinery as the sections above, so the link lines up
       // with them by construction. Restating those numbers by hand does not --
       // they aren't API, and they drift with the OS.
+      // FORK: hidden (see LocalchatFeatures.sourceCodeLink).
+      if LocalchatFeatures.sourceCodeLink {
       List {
         // Named for the destination, like the rows above -- "Open source" reads
         // as a statement (or worse, as a verb) where every other label in the
@@ -373,6 +375,7 @@ struct SettingsSidebar: View {
       // the fill keeps at the sides, so the link isn't nearer the bottom edge
       // than the side edges.
       .padding(.bottom, Self.rowSideInset - Self.linkListBottomPadding)
+      }
     }
   }
 }
