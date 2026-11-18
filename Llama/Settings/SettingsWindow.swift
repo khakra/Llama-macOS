@@ -729,6 +729,8 @@ struct SettingsView: View {
                 showingHFTokenSheet = true
               }
 
+              // FORK: no HF sign-in (see LocalchatFeatures.hfSignIn).
+              if LocalchatFeatures.hfSignIn {
               // Ellipsis: continues in the browser.
               Button("Sign In…") {
                 signInToHF()
@@ -736,6 +738,7 @@ struct SettingsView: View {
               // A second click while the browser is up would start a second
               // flow, which ASWebAuthenticationSession rejects anyway.
               .disabled(isSigningInToHF)
+              }
             }
           }
         }

@@ -226,7 +226,7 @@ enum HFCache {
       let page = "huggingface.co/\(repo)"
       return authenticated
         ? "Your Hugging Face account doesn’t have access to this model yet. Request access on its page, then try again once it’s granted:\n\(page)"
-        : "This model is gated. Sign in to Hugging Face in Settings > Advanced, then request access on its page:\n\(page)"
+        : "This model is gated. Add a Hugging Face token in Settings > Advanced, then request access on its page:\n\(page)"  // FORK: no sign-in
     }
   }
 

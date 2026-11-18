@@ -304,10 +304,10 @@ extension ModelManager {
     switch status {
     case 401:
       return
-        "Hugging Face requires authentication for this download. Sign in to Hugging Face in Settings > Advanced and try again."
+        "Hugging Face requires authentication for this download. Add a Hugging Face token in Settings > Advanced and try again."  // FORK: no sign-in
     case 403, 429:
       return
-        "Hugging Face refused the download (HTTP \(status)). This usually means a rate limit — try again in a few minutes, or sign in to Hugging Face in Settings to lift the limit."
+        "Hugging Face refused the download (HTTP \(status)). This usually means a rate limit — try again in a few minutes, or add a Hugging Face token in Settings to lift the limit."  // FORK: no sign-in
     case 404:
       return
         "Hugging Face returned 404 for this file. The repo may have moved or been removed."
