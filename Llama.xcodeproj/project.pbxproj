@@ -75,6 +75,7 @@
 				156891982E2685F700F71BD4 /* Sources */,
 				156891992E2685F700F71BD4 /* Frameworks */,
 				1568919A2E2685F700F71BD4 /* Resources */,
+				4C0CA1C4A7B0000000000A01 /* FORK: Bundle localchat web UI */,
 			);
 			buildRules = (
 			);
@@ -139,6 +140,31 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		4C0CA1C4A7B0000000000A01 /* FORK: Bundle localchat web UI */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/scripts/bundle-webui.sh",
+				"$(SRCROOT)/../llama.cpp/ui/apps/chat/dist",
+			);
+			name = "FORK: Bundle localchat web UI";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/WebUI",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/scripts/bundle-webui.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		156891982E2685F700F71BD4 /* Sources */ = {
@@ -281,6 +307,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Llama/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -315,6 +342,7 @@
 				CURRENT_PROJECT_VERSION = "$(CURRENT_PROJECT_VERSION:default=1)";
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Llama/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";

@@ -95,10 +95,11 @@ class LlamaServer {
   /// working chat, and it's self-healing: put the folder back and the next
   /// start serves it again.
   nonisolated static var effectiveWebUIDirectory: String? {
-    guard let dir = UserSettings.customWebUIDirectory else { return nil }
+    // FORK: fall back to our bundled UI rather than the engine's own.
+    guard let dir = UserSettings.customWebUIDirectory else { return BundledWebUI.directory?.path }
     guard hasIndexPage(dir) else {
       logger.notice("custom web app folder has no index.html -- using the built-in web UI")
-      return nil
+      return BundledWebUI.directory?.path  // FORK: as above
     }
     return dir.path
   }
