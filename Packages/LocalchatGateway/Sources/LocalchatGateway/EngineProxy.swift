@@ -38,14 +38,19 @@ struct EngineProxy: Sendable {
     "content-length",
   ]
 
-  func forward(_ request: Request) async -> Response {
+  /// Forwards `request`. Pass `body` when the caller already read it (to look at the model).
+  func forward(_ request: Request, body collected: ByteBuffer? = nil) async -> Response {
     guard let endpoint = engine() else { return .engineUnavailable }
 
     let body: ByteBuffer
-    do {
-      body = try await request.body.collect(upTo: Self.maxRequestBody)
-    } catch {
-      return .jsonError(.contentTooLarge, type: "invalid_request_error", message: "Request body too large.")
+    if let collected {
+      body = collected
+    } else {
+      do {
+        body = try await request.body.collect(upTo: Self.maxRequestBody)
+      } catch {
+        return .jsonError(.contentTooLarge, type: "invalid_request_error", message: "Request body too large.")
+      }
     }
 
     var forwardedHeaders: [(String, String)] = []
@@ -89,13 +94,37 @@ struct EngineProxy: Sendable {
   }
 }
 
+extension EngineProxy {
+  /// GET `path` from the engine and parse the JSON body. Nil if the engine is
+  /// down or answers with an error.
+  func fetchJSON(_ path: String, headers: HTTPFields) async -> [String: Any]? {
+    guard let endpoint = engine() else { return nil }
+    var forwarded: [(String, String)] = []
+    for field in headers where field.name == .authorization { forwarded.append((field.name.rawName, field.value)) }
+    guard
+      let (head, chunks) = try? await UpstreamClient.send(
+        host: endpoint.host, port: endpoint.port, method: "GET", path: path, headers: forwarded, body: nil),
+      head.status == 200
+    else { return nil }
+    var buffer = ByteBuffer()
+    do {
+      for try await chunk in chunks {
+        var chunk = chunk
+        buffer.writeBuffer(&chunk)
+        if buffer.readableBytes > 50_000_000 { return nil }
+      }
+    } catch { return nil }
+    return (try? JSONSerialization.jsonObject(with: Data(buffer.readableBytesView))) as? [String: Any]
+  }
+}
+
 extension Response {
   /// OpenAI-style error body, so clients that read `error.message` show something useful.
   static func jsonError(_ status: HTTPResponse.Status, type: String, message: String) -> Response {
     let payload: [String: Any] = [
       "error": ["code": status.code, "type": type, "message": message]
     ]
-    let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
+    let data = (try? JSONSerialization.data(withJSONObject: payload, options: .withoutEscapingSlashes)) ?? Data()
     return Response(
       status: status,
       headers: [.contentType: "application/json"],

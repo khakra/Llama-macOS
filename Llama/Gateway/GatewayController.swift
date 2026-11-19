@@ -25,6 +25,11 @@ final class GatewayController {
       hostPolicy: HostPolicy(loopbackOnly: bindAddress == nil || bindAddress == "127.0.0.1"))
   }
 
+  /// Hands the gateway the cloud providers to route to. Takes effect on the next request.
+  func setCloudProviders(_ providers: [CloudProvider]) {
+    gateway.setCloudProviders(providers)
+  }
+
   /// Starts the gateway, or rebinds it if its settings changed. Returns nil once
   /// it's listening, or the name of whatever holds the port.
   func ensureRunning() async -> String? {
@@ -41,6 +46,7 @@ final class GatewayController {
     do {
       try await gateway.start(configuration)
       running = configuration
+      CloudSettings.shared.pushToGateway()
       logger.info(
         "listening on \(configuration.addresses.joined(separator: ","), privacy: .public) port \(port)")
       return nil
