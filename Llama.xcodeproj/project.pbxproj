@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		154EE9712EA64E200083FDEE /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 154EE9702EA64E200083FDEE /* Sentry */; };
 		156891D32E268C5F00F71BD4 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 156891D22E268C5F00F71BD4 /* Sparkle */; };
+		4C0CA1C4A7B0000000000A04 /* LocalchatGateway in Frameworks */ = {isa = PBXBuildFile; productRef = 4C0CA1C4A7B0000000000A03 /* LocalchatGateway */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +44,7 @@
 			files = (
 				156891D32E268C5F00F71BD4 /* Sparkle in Frameworks */,
 				154EE9712EA64E200083FDEE /* Sentry in Frameworks */,
+				4C0CA1C4A7B0000000000A04 /* LocalchatGateway in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -88,6 +90,7 @@
 			packageProductDependencies = (
 				156891D22E268C5F00F71BD4 /* Sparkle */,
 				154EE9702EA64E200083FDEE /* Sentry */,
+				4C0CA1C4A7B0000000000A03 /* LocalchatGateway */,
 			);
 			productName = Llama;
 			productReference = 1568919C2E2685F700F71BD4 /* Llama.app */;
@@ -120,6 +123,7 @@
 			packageReferences = (
 				156891D12E268C5F00F71BD4 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				154EE96F2EA64E200083FDEE /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				4C0CA1C4A7B0000000000A02 /* XCLocalSwiftPackageReference "Packages/LocalchatGateway" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1568919D2E2685F700F71BD4 /* Products */;
@@ -386,6 +390,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		4C0CA1C4A7B0000000000A02 /* XCLocalSwiftPackageReference "Packages/LocalchatGateway" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LocalchatGateway;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		154EE96F2EA64E200083FDEE /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -415,6 +426,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 156891D12E268C5F00F71BD4 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		4C0CA1C4A7B0000000000A03 /* LocalchatGateway */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4C0CA1C4A7B0000000000A02 /* XCLocalSwiftPackageReference "Packages/LocalchatGateway" */;
+			productName = LocalchatGateway;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -453,7 +453,7 @@ class LlamaServer {
   ///
   /// `0.0.0.0` already covers loopback, and repeating `127.0.0.1` would fail
   /// the second bind.
-  private static func boundAddresses(for bindAddress: String) -> [String] {
+  static func boundAddresses(for bindAddress: String) -> [String] {  // FORK: also used by GatewayController
     guard bindAddress != "0.0.0.0", bindAddress != "127.0.0.1"
     else { return [bindAddress] }
     return ["127.0.0.1", bindAddress]
@@ -515,7 +515,7 @@ class LlamaServer {
 
     arguments.append(contentsOf: [
       // Other value-taking flags.
-      "--port", String(Self.port),
+      "--port", String(LocalchatFeatures.gateway ? EnginePort.current : Self.port),  // FORK: engine behind the gateway
       // No cap on the number of loaded models -- memory is the real limit,
       // and the margin below enforces it: before loading a model, the router
       // unloads idle models (least recently used first) until the new one
@@ -532,7 +532,8 @@ class LlamaServer {
     ])
 
     // Bind to custom address if network exposure is enabled
-    if let bindAddress = effectiveBindAddress {
+    // FORK: with the gateway, it owns the network bind and the engine stays on loopback.
+    if !LocalchatFeatures.gateway, let bindAddress = effectiveBindAddress {
       arguments.append(contentsOf: ["--host", hostArgument(for: bindAddress)])
     }
 
@@ -577,7 +578,7 @@ class LlamaServer {
   /// it alone. In that case we return the name of the offending process so the
   /// caller can surface the conflict as a clear error instead of letting the
   /// bind fail opaquely; `nil` means the port is now ours to bind.
-  nonisolated static func reclaimPort() -> String? {
+  nonisolated static func reclaimPort(_ port: Int = LlamaServer.port) -> String? {  // FORK: port parameter for the gateway
     // `lsof -ti` prints just the PIDs listening on the TCP port.
     let lsof = Process()
     lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
@@ -661,6 +662,11 @@ class LlamaServer {
       // seconds under load, so they must not run on the main actor.
       let blocker = await Task.detached {
         Self.terminateAndWait(previous)
+        // FORK: with the gateway, the engine moves to an internal port (EnginePort).
+        if LocalchatFeatures.gateway {
+          _ = EnginePort.prepareForLaunch(userPort: Self.port)
+          return String?.none
+        }
         return Self.reclaimPort()
       }.value
 
@@ -678,6 +684,14 @@ class LlamaServer {
         state = .error(.portInUse(port: Self.port, by: blocker))
         return
       }
+
+      // FORK: bring the gateway up on the user port before the engine.
+      if LocalchatFeatures.gateway, let blocker = await GatewayController.shared.ensureRunning() {
+        guard generation == startGeneration, state == .loading else { return }
+        state = .error(.portInUse(port: Self.port, by: blocker))
+        return
+      }
+      guard generation == startGeneration, state == .loading else { return }  // FORK: as above
 
       launchServerProcess()
     }

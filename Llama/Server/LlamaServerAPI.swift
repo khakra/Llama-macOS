@@ -67,7 +67,11 @@ struct LlamaServerAPI {
   // (port, or a new network bind address) is picked up without recreating the
   // client. The host matters: with a specific bind address the server isn't on
   // loopback at all, so localhost would silently fail every request.
-  private var baseUrl: String { "http://\(LlamaServer.localHost):\(LlamaServer.port)" }
+  private var baseUrl: String {
+    // FORK: behind the gateway, the app manages the engine on its internal port directly.
+    if LocalchatFeatures.gateway { return "http://127.0.0.1:\(EnginePort.current)" }
+    return "http://\(LlamaServer.localHost):\(LlamaServer.port)"
+  }
 
   /// A session that never caches.
   ///

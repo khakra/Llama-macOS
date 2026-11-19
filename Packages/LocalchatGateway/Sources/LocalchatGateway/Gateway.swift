@@ -1,0 +1,158 @@
+// FORK: localchat gateway (see docs/gateway.md in khakra/localchat).
+import Foundation
+import Hummingbird
+import Logging
+import NIOCore
+
+/// Where and how the gateway listens.
+public struct GatewayConfiguration: Sendable, Equatable {
+  /// Addresses to bind, e.g. `["127.0.0.1"]`, `["0.0.0.0"]`, or loopback plus a LAN address.
+  public var addresses: [String]
+  public var port: Int
+  public var hostPolicy: HostPolicy
+
+  public init(addresses: [String], port: Int, hostPolicy: HostPolicy) {
+    self.addresses = addresses
+    self.port = port
+    self.hostPolicy = hostPolicy
+  }
+}
+
+/// The HTTP server in front of the engine. Phase 0: checks the Host header and
+/// passes every request through to the engine.
+public actor Gateway {
+
+  private let engine: @Sendable () -> EngineEndpoint?
+  private let logger: Logger
+  private var listeners: [Task<Void, Never>] = []
+  public private(set) var configuration: GatewayConfiguration?
+
+  public init(engine: @escaping @Sendable () -> EngineEndpoint?) {
+    self.engine = engine
+    var logger = Logger(label: "localchat.gateway")
+    logger.logLevel = .warning
+    self.logger = logger
+  }
+
+  public var isRunning: Bool { !listeners.isEmpty }
+
+  /// Binds every address in `configuration`, replacing any current listeners.
+  /// Returns once all are accepting connections; throws (with nothing left
+  /// running) if any address can't be bound, for example because the port is taken.
+  public func start(_ configuration: GatewayConfiguration) async throws {
+    await stop()
+    let responder = GatewayResponder(
+      hostPolicy: configuration.hostPolicy,
+      proxy: EngineProxy(engine: engine))
+
+    var started: [Task<Void, Never>] = []
+    do {
+      for address in configuration.addresses {
+        started.append(
+          try await Self.listen(
+            address: address, port: configuration.port, responder: responder, logger: logger))
+      }
+    } catch {
+      for task in started { task.cancel() }
+      for task in started { await task.value }
+      throw error
+    }
+    listeners = started
+    self.configuration = configuration
+  }
+
+  /// Stops all listeners and waits until their ports are released.
+  public func stop() async {
+    let running = listeners
+    listeners = []
+    configuration = nil
+    for task in running { task.cancel() }
+    for task in running { await task.value }
+  }
+
+  private static func listen(
+    address: String, port: Int, responder: GatewayResponder, logger: Logger
+  ) async throws -> Task<Void, Never> {
+    let signal = StartSignal()
+    let task = Task {
+      let app = Application(
+        responder: responder,
+        configuration: ApplicationConfiguration(
+          address: .hostname(address, port: port), serverName: nil),
+        onServerRunning: { _ in signal.succeed() },
+        logger: logger
+      )
+      do {
+        // No signal handlers: this runs inside the app, which handles its own termination.
+        try await app.runService(gracefulShutdownSignals: [])
+        signal.fail(GatewayError.stoppedBeforeStarting)
+      } catch {
+        signal.fail(error)
+      }
+    }
+    do {
+      try await signal.wait()
+    } catch {
+      task.cancel()
+      await task.value
+      throw error
+    }
+    return task
+  }
+}
+
+public enum GatewayError: Error {
+  case stoppedBeforeStarting
+}
+
+struct GatewayResponder: HTTPResponder {
+  typealias Context = BasicRequestContext
+
+  let hostPolicy: HostPolicy
+  let proxy: EngineProxy
+
+  func respond(to request: Request, context: Context) async throws -> Response {
+    guard hostPolicy.allows(host: request.head.authority) else { return .forbiddenHost }
+    return await proxy.forward(request)
+  }
+}
+
+/// One-shot "the listener is up, or failed" signal that tolerates firing
+/// before anyone waits.
+final class StartSignal: @unchecked Sendable {
+  private enum State {
+    case pending(CheckedContinuation<Void, Error>?)
+    case done(Result<Void, Error>)
+  }
+
+  private let lock = NSLock()
+  private var state: State = .pending(nil)
+
+  func succeed() { resolve(.success(())) }
+  func fail(_ error: Error) { resolve(.failure(error)) }
+
+  private func resolve(_ result: Result<Void, Error>) {
+    lock.lock()
+    guard case .pending(let continuation) = state else {
+      lock.unlock()
+      return
+    }
+    state = .done(result)
+    lock.unlock()
+    continuation?.resume(with: result)
+  }
+
+  func wait() async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      lock.lock()
+      switch state {
+      case .pending:
+        state = .pending(continuation)
+        lock.unlock()
+      case .done(let result):
+        lock.unlock()
+        continuation.resume(with: result)
+      }
+    }
+  }
+}

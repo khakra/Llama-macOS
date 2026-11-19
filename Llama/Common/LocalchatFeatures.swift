@@ -6,4 +6,8 @@ enum LocalchatFeatures {
 
   /// Upstream's "Source code" link to ggml-org/Llama-macOS at the foot of the Settings sidebar.
   static let sourceCodeLink = false
+
+  /// The gateway (docs/gateway.md): an HTTP server in the app on the user-facing port,
+  /// in front of the engine on an internal port. Turn off to run the engine directly, as upstream does.
+  static let gateway = true
 }
