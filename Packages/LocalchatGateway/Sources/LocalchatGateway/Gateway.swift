@@ -24,6 +24,7 @@ public struct GatewayConfiguration: Sendable, Equatable {
 public actor Gateway {
   private let engine: @Sendable () -> EngineEndpoint?
   private let cloudProviders = CloudProviders()
+  private let cloudSettings = CloudSettingsBackendBox()
   private let logger: Logger
   private var listeners: [Task<Void, Never>] = []
   public private(set) var configuration: GatewayConfiguration?
@@ -43,6 +44,11 @@ public actor Gateway {
     cloudProviders.replace(providers)
   }
 
+  /// Where the chat UI's Cloud settings read and write (`/localchat/cloud/...`).
+  public nonisolated func setCloudSettingsBackend(_ backend: CloudSettingsBackend?) {
+    cloudSettings.set(backend)
+  }
+
   /// Binds every address in `configuration`, replacing any current listeners.
   /// Returns once all are accepting connections; throws (with nothing left
   /// running) if any address can't be bound, for example because the port is taken.
@@ -53,7 +59,8 @@ public actor Gateway {
       proxy: EngineProxy(engine: engine),
       cloud: CloudRouter(
         providers: cloudProviders, catalog: .shared,
-        access: CloudAccessPolicy(port: configuration.port), session: CloudRouter.streamingSession))
+        access: CloudAccessPolicy(port: configuration.port), session: CloudRouter.streamingSession),
+      settingsAPI: CloudSettingsAPI(backend: { [cloudSettings] in cloudSettings.backend }))
 
     var started: [Task<Void, Never>] = []
     do {
@@ -134,6 +141,7 @@ struct GatewayResponder: HTTPResponder {
   let hostPolicy: HostPolicy
   let proxy: EngineProxy
   let cloud: CloudRouter
+  let settingsAPI: CloudSettingsAPI
 
   /// Endpoints that name a model in their JSON body.
   static let modelBodyPaths: Set<String> = [
@@ -146,6 +154,10 @@ struct GatewayResponder: HTTPResponder {
     let path = request.uri.path
     let cloudAllowed = cloud.access.allows(
       origin: request.headers[.origin], clientIsLoopback: context.clientIsLoopback)
+
+    if path.hasPrefix(CloudSettingsAPI.prefix) {
+      return cloudAllowed ? await settingsAPI.handle(request, path: path) : .cloudForbidden
+    }
 
     switch (request.method, path) {
     case (.get, "/v1/models"), (.get, "/models"):

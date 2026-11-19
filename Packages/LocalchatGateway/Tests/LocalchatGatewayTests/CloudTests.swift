@@ -133,11 +133,13 @@ final class CloudGatewayTests: XCTestCase {
   private var tasks: [Task<Void, Never>] = []
   private var gateway: Gateway!
   private var gatewayPort = 0
+  private var providerPort = 0
   static let received = Recorder()
 
   override func setUp() async throws {
     client = HTTPClient(eventLoopGroup: HTTPClient.defaultEventLoopGroup)
-    let enginePort = freePort(), providerPort = freePort()
+    let enginePort = freePort()
+    providerPort = freePort()
     gatewayPort = freePort()
 
     let engine = Router()
@@ -274,6 +276,37 @@ final class CloudGatewayTests: XCTestCase {
     XCTAssertTrue(unreachable.body.contains("Couldn't reach OpenRouter"))
   }
 
+  func testSettingsAPINeverReturnsKeysAndRefusesOtherSites() async throws {
+    let backend = FakeBackend(providerPort: providerPort)
+    gateway.setCloudSettingsBackend(backend)
+
+    let (status, body) = try await request("GET", "/localchat/cloud/providers", origin: "http://localhost:\(gatewayPort)")
+    XCTAssertEqual(status, 200)
+    XCTAssertTrue(body.contains(#""hasKey":true"#))
+    XCTAssertFalse(body.contains("good-key"), "a key leaked into the providers list")
+
+    let saved = try await request("PUT", "/localchat/cloud/providers/openrouter/key", json: ["key": "new-key"])
+    XCTAssertEqual(saved.status, 200)
+    let storedKey = await backend.key
+    XCTAssertEqual(storedKey, "new-key")
+
+    let patched = try await request("PATCH", "/localchat/cloud/providers/openrouter", json: ["models": ["vendor/smart", "vendor/other"]])
+    XCTAssertEqual(patched.status, 200)
+    XCTAssertTrue(patched.body.contains("vendor/other"))
+
+    let models = try await request("GET", "/localchat/cloud/providers/openrouter/models")
+    XCTAssertEqual(models.status, 200)
+    XCTAssertTrue(models.body.contains(#""contextLength":64000"#))
+
+    let evil = try await request("PUT", "/localchat/cloud/providers/openrouter/key", json: ["key": "stolen"], origin: "https://evil.example")
+    XCTAssertEqual(evil.status, 403)
+    let unchanged = await backend.key
+    XCTAssertEqual(unchanged, "new-key")
+
+    let unknown = try await request("PATCH", "/localchat/cloud/providers/nope", json: ["enabled": true])
+    XCTAssertEqual(unknown.status, 404)
+  }
+
   func testLocalModelsStillPassThrough() async throws {
     let (status, body) = try await request("POST", "/v1/chat/completions", json: ["model": "local/model:Q4", "messages": []])
     XCTAssertEqual(status, 200)
@@ -284,4 +317,33 @@ final class CloudGatewayTests: XCTestCase {
 actor Recorder {
   private(set) var value: (Data, String?) = (Data(), nil)
   func set(_ data: Data, auth: String?) { value = (data, auth) }
+}
+
+actor FakeBackend: CloudSettingsBackend {
+  let providerPort: Int
+  var key: String? = "good-key"
+  var models = ["vendor/smart"]
+  var enabled = true
+
+  init(providerPort: Int) { self.providerPort = providerPort }
+
+  func statuses() async -> [CloudProviderStatus] {
+    [CloudProviderStatus(preset: .openRouter, enabled: enabled, hasKey: key != nil, models: models)]
+  }
+  func update(providerID: String, enabled: Bool?, models: [String]?) async -> CloudProviderStatus? {
+    guard providerID == "openrouter" else { return nil }
+    if let enabled { self.enabled = enabled }
+    if let models { self.models = models }
+    return await statuses().first
+  }
+  func setKey(providerID: String, key: String?) async -> Bool {
+    guard providerID == "openrouter" else { return false }
+    self.key = key
+    return true
+  }
+  func provider(providerID: String) async -> CloudProvider? {
+    guard providerID == "openrouter" else { return nil }
+    return CloudProvider(preset: .openRouter, apiKey: key, models: models,
+                         baseURL: URL(string: "http://127.0.0.1:\(providerPort)/v1")!)
+  }
 }

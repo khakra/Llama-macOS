@@ -11,7 +11,11 @@ final class GatewayController {
   static let shared = GatewayController()
 
   private let logger = Logger(subsystem: Logging.subsystem, category: "Gateway")
-  private let gateway = Gateway(engine: { EngineEndpoint(port: EnginePort.current) })
+  private let gateway: Gateway = {
+    let gateway = Gateway(engine: { EngineEndpoint(port: EnginePort.current) })
+    gateway.setCloudSettingsBackend(AppCloudSettingsBackend())
+    return gateway
+  }()
   private var running: GatewayConfiguration?
 
   /// Listens where the engine used to: loopback, or the Network setting's address

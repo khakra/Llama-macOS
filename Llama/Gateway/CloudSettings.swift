@@ -1,7 +1,7 @@
 import Foundation
 import LocalchatGateway
 
-// FORK: localchat gateway. Which cloud providers are on and which of their models
+// FORK: localchat gateway. Which cloud providers are on (edited in the chat UI's Settings › Cloud) and which of their models
 // to show. Settings live in `defaults` (`cloudProviders`); keys in the Keychain.
 @MainActor
 final class CloudSettings: ObservableObject {
@@ -46,16 +46,20 @@ final class CloudSettings: ObservableObject {
     return key
   }
 
-  func setKey(_ key: String?, for preset: CloudProviderPreset) {
+  /// Stores (or removes) the key. Returns false if the Keychain refused.
+  @discardableResult
+  func setKey(_ key: String?, for preset: CloudProviderPreset) -> Bool {
+    var ok = true
     if let key, !key.isEmpty {
-      ProviderKeychain.setKey(key, for: preset.id)
-      keys[preset.id] = key
+      ok = ProviderKeychain.setKey(key, for: preset.id)
+      if ok { keys[preset.id] = key.trimmingCharacters(in: .whitespacesAndNewlines) }
     } else {
       ProviderKeychain.deleteKey(for: preset.id)
       keys[preset.id] = .some(nil)
     }
     objectWillChange.send()
     pushToGateway()
+    return ok
   }
 
   /// A provider as the gateway needs it, whether or not it's enabled (for Test and the model picker).
@@ -84,5 +88,49 @@ final class CloudSettings: ObservableObject {
       UserDefaults.standard.set(data, forKey: Self.defaultsKey)
     }
     pushToGateway()
+  }
+}
+
+// FORK: localchat gateway. Lets the chat UI's Cloud settings (via /localchat/cloud/...)
+// read and change these settings. Keys go in, never out.
+struct AppCloudSettingsBackend: CloudSettingsBackend {
+  func statuses() async -> [CloudProviderStatus] {
+    await MainActor.run {
+      let settings = CloudSettings.shared
+      return CloudProviderPreset.all.map { preset in
+        let entry = settings.settings(for: preset)
+        return CloudProviderStatus(
+          preset: preset, enabled: entry.enabled,
+          hasKey: !(settings.key(for: preset)?.isEmpty ?? true), models: entry.models)
+      }
+    }
+  }
+
+  func update(providerID: String, enabled: Bool?, models: [String]?) async -> CloudProviderStatus? {
+    await MainActor.run {
+      guard let preset = CloudProviderPreset.named(providerID) else { return nil }
+      let settings = CloudSettings.shared
+      settings.update(preset) { entry in
+        if let enabled { entry.enabled = enabled }
+        if let models { entry.models = models }
+      }
+      let entry = settings.settings(for: preset)
+      return CloudProviderStatus(
+        preset: preset, enabled: entry.enabled,
+        hasKey: !(settings.key(for: preset)?.isEmpty ?? true), models: entry.models)
+    }
+  }
+
+  func setKey(providerID: String, key: String?) async -> Bool {
+    await MainActor.run {
+      guard let preset = CloudProviderPreset.named(providerID) else { return false }
+      return CloudSettings.shared.setKey(key, for: preset)
+    }
+  }
+
+  func provider(providerID: String) async -> CloudProvider? {
+    await MainActor.run {
+      CloudProviderPreset.named(providerID).map { CloudSettings.shared.provider(for: $0) }
+    }
   }
 }

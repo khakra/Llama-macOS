@@ -208,7 +208,6 @@ enum SettingsTab: CaseIterable, Identifiable {
   case general
   case network
   case chat
-  case cloud  // FORK: localchat Settings › Cloud
   case aliases
   case advanced
 
@@ -223,9 +222,9 @@ enum SettingsTab: CaseIterable, Identifiable {
   /// Aliases row) does nothing.
   static var allCases: [SettingsTab] {
     #if DEBUG
-      [.general, .network, .chat, .cloud, .aliases, .advanced]  // FORK: .cloud
+      [.general, .network, .chat, .aliases, .advanced]
     #else
-      [.general, .network, .chat, .cloud, .advanced]  // FORK: .cloud
+      [.general, .network, .chat, .advanced]
     #endif
   }
 
@@ -245,7 +244,6 @@ enum SettingsTab: CaseIterable, Identifiable {
     case .general: "General"
     case .network: "Network"
     case .chat: "Chat"
-    case .cloud: "Cloud"  // FORK
     case .aliases: "Aliases"
     case .advanced: "Advanced"
     }
@@ -256,7 +254,6 @@ enum SettingsTab: CaseIterable, Identifiable {
     case .general: "gearshape"
     case .network: "network"
     case .chat: "bubble"
-    case .cloud: "cloud"  // FORK
     case .aliases: "tag"
     case .advanced: "slider.horizontal.3"
     }
@@ -491,7 +488,6 @@ struct SettingsView: View {
     case .general: generalForm
     case .network: networkForm
     case .chat: chatForm
-    case .cloud: CloudSettingsView()  // FORK
     case .aliases: AliasesSettingsView()
     case .advanced: advancedForm
     }
