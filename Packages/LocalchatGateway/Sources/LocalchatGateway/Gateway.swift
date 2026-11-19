@@ -25,12 +25,15 @@ public actor Gateway {
   private let engine: @Sendable () -> EngineEndpoint?
   private let cloudProviders = CloudProviders()
   private let cloudSettings = CloudSettingsBackendBox()
+  private let tools = GatewayTools()
+  private let mcp: GatewayMCP
   private let logger: Logger
   private var listeners: [Task<Void, Never>] = []
   public private(set) var configuration: GatewayConfiguration?
 
-  public init(engine: @escaping @Sendable () -> EngineEndpoint?) {
+  public init(engine: @escaping @Sendable () -> EngineEndpoint?, version: String = "0.0.0") {
     self.engine = engine
+    self.mcp = GatewayMCP(tools: tools, version: version)
     var logger = Logger(label: "localchat.gateway")
     logger.logLevel = .warning
     self.logger = logger
@@ -42,6 +45,11 @@ public actor Gateway {
   /// for the next request; no restart needed.
   public nonisolated func setCloudProviders(_ providers: [CloudProvider]) {
     cloudProviders.replace(providers)
+  }
+
+  /// The tools offered over `/mcp`. Takes effect for the next list or call.
+  public nonisolated func setTools(_ newTools: [GatewayTool]) {
+    tools.replace(newTools)
   }
 
   /// Where the chat UI's Cloud settings read and write (`/localchat/cloud/...`).
@@ -60,7 +68,8 @@ public actor Gateway {
       cloud: CloudRouter(
         providers: cloudProviders, catalog: .shared,
         access: CloudAccessPolicy(port: configuration.port), session: CloudRouter.streamingSession),
-      settingsAPI: CloudSettingsAPI(backend: { [cloudSettings] in cloudSettings.backend }))
+      settingsAPI: CloudSettingsAPI(backend: { [cloudSettings] in cloudSettings.backend }),
+      mcp: mcp, tools: tools)
 
     var started: [Task<Void, Never>] = []
     do {
@@ -138,10 +147,29 @@ struct GatewayContext: RequestContext {
 struct GatewayResponder: HTTPResponder {
   typealias Context = GatewayContext
 
+  /// Echoes an already-allowed Origin so the chat page works whether it was
+  /// opened as localhost or 127.0.0.1. Never a wildcard.
+  static func withCORS(_ response: Response, origin: String?, request: Request) -> Response {
+    guard let origin, !origin.isEmpty else { return response }
+    var response = response
+    response.headers[.accessControlAllowOrigin] = origin
+    response.headers[.vary] = "Origin"
+    response.headers[.accessControlExposeHeaders] = "Mcp-Session-Id, Mcp-Protocol-Version"
+    if request.method == .options {
+      response.headers[.accessControlAllowMethods] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      response.headers[.accessControlAllowHeaders] =
+        request.headers[.accessControlRequestHeaders] ?? "Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version"
+      response.headers[.accessControlMaxAge] = "600"
+    }
+    return response
+  }
+
   let hostPolicy: HostPolicy
   let proxy: EngineProxy
   let cloud: CloudRouter
   let settingsAPI: CloudSettingsAPI
+  let mcp: GatewayMCP
+  let tools: GatewayTools
 
   /// Endpoints that name a model in their JSON body.
   static let modelBodyPaths: Set<String> = [
@@ -155,8 +183,27 @@ struct GatewayResponder: HTTPResponder {
     let cloudAllowed = cloud.access.allows(
       origin: request.headers[.origin], clientIsLoopback: context.clientIsLoopback)
 
-    if path.hasPrefix(CloudSettingsAPI.prefix) {
-      return cloudAllowed ? await settingsAPI.handle(request, path: path) : .cloudForbidden
+    // Our own endpoints: MCP (Streamable HTTP) for the app's tools, the
+    // discovery endpoint the chat UI uses to add that server, and the cloud
+    // settings API. Same access rule as cloud models. CORS only for allowed
+    // local origins (localhost vs 127.0.0.1 are different origins to a browser).
+    if path == "/mcp" || path.hasPrefix("/localchat/") {
+      guard cloudAllowed else { return .cloudForbidden }
+      let origin = request.headers[.origin]
+      if request.method == .options {
+        return Self.withCORS(Response(status: .noContent), origin: origin, request: request)
+      }
+      let response: Response
+      if path == "/mcp" {
+        response = await mcp.handle(request)
+      } else if path == "/localchat/info", request.method == .get {
+        response = .json(["name": "LocalChat", "mcp": ["path": "/mcp", "tools": tools.all.map(\.name)]])
+      } else if path.hasPrefix(CloudSettingsAPI.prefix) {
+        response = await settingsAPI.handle(request, path: path)
+      } else {
+        response = .jsonError(.notFound, type: "not_found", message: "No such LocalChat endpoint.")
+      }
+      return Self.withCORS(response, origin: origin, request: request)
     }
 
     switch (request.method, path) {

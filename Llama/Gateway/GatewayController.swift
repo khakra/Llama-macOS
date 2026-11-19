@@ -12,8 +12,10 @@ final class GatewayController {
 
   private let logger = Logger(subsystem: Logging.subsystem, category: "Gateway")
   private let gateway: Gateway = {
-    let gateway = Gateway(engine: { EngineEndpoint(port: EnginePort.current) })
+    let gateway = Gateway(engine: { EngineEndpoint(port: EnginePort.current) }, version: AppInfo.shortVersion)
     gateway.setCloudSettingsBackend(AppCloudSettingsBackend())
+    // Tools offered over /mcp (docs/gateway.md, phase 3).
+    gateway.setTools([LocalchatInfoTool()])
     return gateway
   }()
   private var running: GatewayConfiguration?

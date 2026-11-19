@@ -11,6 +11,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.28.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.80.0"),
+    .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.37.0"),
   ],
   targets: [
@@ -21,6 +22,7 @@ let package = Package(
         .product(name: "NIOCore", package: "swift-nio"),
         .product(name: "NIOPosix", package: "swift-nio"),
         .product(name: "NIOHTTP1", package: "swift-nio"),
+        .product(name: "MCP", package: "swift-sdk"),
       ],
       swiftSettings: [.swiftLanguageMode(.v5)]
     ),
@@ -31,6 +33,7 @@ let package = Package(
         "LocalchatGateway",
         .product(name: "Hummingbird", package: "hummingbird"),
         .product(name: "AsyncHTTPClient", package: "async-http-client"),
+        .product(name: "MCP", package: "swift-sdk"),
       ],
       swiftSettings: [.swiftLanguageMode(.v5)]
     ),
