@@ -36,7 +36,6 @@ struct MemoryAPI: Sendable {
         guard let body = await Self.body(request) else { return .badJSON }
         let updated = settings.update { value in
           if let enabled = body["enabled"] as? Bool { value.enabled = enabled }
-          if let withCloud = body["withCloud"] as? Bool { value.withCloud = withCloud }
         }
         return .json(Self.json(updated))
 
@@ -73,7 +72,7 @@ struct MemoryAPI: Sendable {
   }
 
   static func json(_ settings: MemorySettings) -> [String: Any] {
-    ["enabled": settings.enabled, "withCloud": settings.withCloud]
+    ["enabled": settings.enabled]
   }
 
   private static func body(_ request: Request) async -> [String: Any]? {

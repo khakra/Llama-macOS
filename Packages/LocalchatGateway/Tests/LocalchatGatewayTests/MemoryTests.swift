@@ -146,8 +146,8 @@ final class MemoryGatewayTests: XCTestCase {
     store = JSONMemoryStore(url: tempStoreURL())
     _ = try await store.add("Is vegetarian", source: .user)
     let persisted = self.persisted
-    gateway.configureMemory(store: store, settings: MemorySettings(enabled: true, withCloud: false)) { settings in
-      Task { await persisted.set(Data("\(settings.enabled),\(settings.withCloud)".utf8), auth: nil) }
+    gateway.configureMemory(store: store, settings: MemorySettings(enabled: true)) { settings in
+      Task { await persisted.set(Data("\(settings.enabled)".utf8), auth: nil) }
     }
   }
 
@@ -188,24 +188,22 @@ final class MemoryGatewayTests: XCTestCase {
     XCTAssertFalse(engine[1].contains("About the user"))
   }
 
-  func testCloudFollowsTheSwitchAndMasterSwitchWorks() async throws {
+  func testCloudModelsGetMemoriesAndMasterSwitchWorks() async throws {
     try await chat("cloud@openrouter/v/m", conversation: "c2")
-    var cloud = await Self.seen.bodies("cloud")
-    XCTAssertFalse(cloud.last?.contains("About the user") ?? true, "withCloud is off")
-
-    let patched = try await send("PATCH", "/localchat/memory/settings", json: ["withCloud": true])
-    XCTAssertEqual(patched.status, 200)
-    try await chat("cloud@openrouter/v/m", conversation: "c2")
-    cloud = await Self.seen.bodies("cloud")
+    let cloud = await Self.seen.bodies("cloud")
     XCTAssertTrue(cloud.last?.contains("Is vegetarian") ?? false)
+
+    let patched = try await send("PATCH", "/localchat/memory/settings", json: ["enabled": false])
+    XCTAssertEqual(patched.status, 200)
     try await Task.sleep(for: .milliseconds(100))
     let saved = await persisted.value.0
-    XCTAssertEqual(String(data: saved, encoding: .utf8), "true,true")
-
-    _ = try await send("PATCH", "/localchat/memory/settings", json: ["enabled": false])
+    XCTAssertEqual(String(data: saved, encoding: .utf8), "false")
     try await chat("local/model:Q4", conversation: "c3")
+    try await chat("cloud@openrouter/v/m", conversation: "c3")
     let engine = await Self.seen.bodies("engine")
+    let cloudAfter = await Self.seen.bodies("cloud")
     XCTAssertFalse(engine.last?.contains("About the user") ?? true)
+    XCTAssertFalse(cloudAfter.last?.contains("About the user") ?? true)
   }
 
   func testSettingsAPI() async throws {

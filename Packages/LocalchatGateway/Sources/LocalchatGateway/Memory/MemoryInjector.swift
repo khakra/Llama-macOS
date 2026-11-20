@@ -3,14 +3,11 @@ import Foundation
 
 /// Memory settings the gateway needs on every request. Stored by the app.
 public struct MemorySettings: Sendable, Equatable {
-  /// Master switch: use memories in chats (and keep the tools working).
+  /// Use memories in chats, with every model, local or cloud.
   public var enabled: Bool
-  /// Also add memories when chatting with cloud models.
-  public var withCloud: Bool
 
-  public init(enabled: Bool = true, withCloud: Bool = true) {
+  public init(enabled: Bool = true) {
     self.enabled = enabled
-    self.withCloud = withCloud
   }
 }
 

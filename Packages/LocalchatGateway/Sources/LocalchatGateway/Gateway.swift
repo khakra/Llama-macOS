@@ -187,13 +187,13 @@ struct GatewayResponder: HTTPResponder {
 
   static let conversationHeader = HTTPField.Name("X-Conversation-Id")!
 
-  /// Adds the memory block to a chat request from LocalChat's own chat UI.
-  /// Only requests with `X-Conversation-Id` (real chat messages, not title
-  /// generation or other apps' API calls), and for cloud models only if allowed.
-  func withMemory(_ body: [String: Any], request: Request, isCloud: Bool) async -> [String: Any]? {
-    guard request.headers[Self.conversationHeader] != nil, let store = memory.store.store else { return nil }
-    let settings = memory.settings.settings
-    guard settings.enabled, !isCloud || settings.withCloud else { return nil }
+  /// Adds the memory block to a chat request from LocalChat's own chat UI, for
+  /// any model. Only requests with `X-Conversation-Id` (real chat messages, not
+  /// title generation or other apps' API calls).
+  func withMemory(_ body: [String: Any], request: Request) async -> [String: Any]? {
+    guard request.headers[Self.conversationHeader] != nil, let store = memory.store.store,
+      memory.settings.settings.enabled
+    else { return nil }
     guard let block = MemoryInjector.block(for: await store.all()) else { return nil }
     return MemoryInjector.inject(block, into: body)
   }
@@ -260,7 +260,7 @@ struct GatewayResponder: HTTPResponder {
       let isChat = path == "/v1/chat/completions" || path == "/chat/completions"
       guard let json, let model = json["model"] as? String, CloudModelID.isCloud(model) else {
         // Local model (or no model): pass through, with memories added to chat messages.
-        if isChat, let json, let withMemory = await withMemory(json, request: request, isCloud: false),
+        if isChat, let json, let withMemory = await withMemory(json, request: request),
           let data = try? JSONSerialization.data(withJSONObject: withMemory, options: .withoutEscapingSlashes)
         {
           return await proxy.forward(request, body: ByteBuffer(bytes: data))
@@ -271,7 +271,7 @@ struct GatewayResponder: HTTPResponder {
 
       switch path {
       case "/v1/chat/completions", "/chat/completions":
-        let withMemory = await withMemory(json, request: request, isCloud: true)
+        let withMemory = await withMemory(json, request: request)
         return await cloud.chat(body: withMemory ?? json, modelID: model)
       case "/models/load", "/models/unload":
         return cloud.resolve(model) == nil ? .unknownCloudModel(model) : .json(["success": true])

@@ -5,23 +5,17 @@ import LocalchatGateway
 // settings are saved; the gateway does the rest.
 enum MemorySetup {
   private static let enabledKey = "memoryEnabled"
-  private static let withCloudKey = "memoryWithCloud"
 
   /// `~/Library/Application Support/LocalChat/memory.json`
   static let store = JSONMemoryStore(url: UserSettings.appSupportDir.appendingPathComponent("memory.json"))
 
-  /// Both on by default: memories are used in chats, cloud models included.
+  /// On by default: memories are used in chats with every model.
   static var settings: MemorySettings {
-    let defaults = UserDefaults.standard
-    return MemorySettings(
-      enabled: defaults.object(forKey: enabledKey) as? Bool ?? true,
-      withCloud: defaults.object(forKey: withCloudKey) as? Bool ?? true)
+    MemorySettings(enabled: UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true)
   }
 
   static func save(_ settings: MemorySettings) {
-    let defaults = UserDefaults.standard
-    defaults.set(settings.enabled, forKey: enabledKey)
-    defaults.set(settings.withCloud, forKey: withCloudKey)
+    UserDefaults.standard.set(settings.enabled, forKey: enabledKey)
   }
 
   static func configure(_ gateway: Gateway) {
