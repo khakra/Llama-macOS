@@ -1,5 +1,6 @@
 // FORK: localchat gateway (see docs/gateway.md in khakra/localchat).
 import Foundation
+import HTTPTypes
 import Hummingbird
 import Logging
 import NIOCore
@@ -27,6 +28,8 @@ public actor Gateway {
   private let cloudSettings = CloudSettingsBackendBox()
   private let tools = GatewayTools()
   private let mcp: GatewayMCP
+  private let memoryStore = MemoryStoreBox()
+  private let memorySettings = MemorySettingsBox()
   private let logger: Logger
   private var listeners: [Task<Void, Never>] = []
   public private(set) var configuration: GatewayConfiguration?
@@ -52,6 +55,15 @@ public actor Gateway {
     tools.replace(newTools)
   }
 
+  /// Turns memory on: where memories are kept, the current settings, and how to
+  /// save settings when the chat UI changes them (docs/memory.md).
+  public nonisolated func configureMemory(
+    store: MemoryStore, settings: MemorySettings, persist: @escaping @Sendable (MemorySettings) -> Void
+  ) {
+    memoryStore.set(store)
+    memorySettings.configure(settings, persist: persist)
+  }
+
   /// Where the chat UI's Cloud settings read and write (`/localchat/cloud/...`).
   public nonisolated func setCloudSettingsBackend(_ backend: CloudSettingsBackend?) {
     cloudSettings.set(backend)
@@ -69,7 +81,8 @@ public actor Gateway {
         providers: cloudProviders, catalog: .shared,
         access: CloudAccessPolicy(port: configuration.port), session: CloudRouter.streamingSession),
       settingsAPI: CloudSettingsAPI(backend: { [cloudSettings] in cloudSettings.backend }),
-      mcp: mcp, tools: tools)
+      mcp: mcp, tools: tools,
+      memory: MemoryAPI(store: memoryStore, settings: memorySettings))
 
     var started: [Task<Void, Never>] = []
     do {
@@ -170,6 +183,20 @@ struct GatewayResponder: HTTPResponder {
   let settingsAPI: CloudSettingsAPI
   let mcp: GatewayMCP
   let tools: GatewayTools
+  let memory: MemoryAPI
+
+  static let conversationHeader = HTTPField.Name("X-Conversation-Id")!
+
+  /// Adds the memory block to a chat request from LocalChat's own chat UI.
+  /// Only requests with `X-Conversation-Id` (real chat messages, not title
+  /// generation or other apps' API calls), and for cloud models only if allowed.
+  func withMemory(_ body: [String: Any], request: Request, isCloud: Bool) async -> [String: Any]? {
+    guard request.headers[Self.conversationHeader] != nil, let store = memory.store.store else { return nil }
+    let settings = memory.settings.settings
+    guard settings.enabled, !isCloud || settings.withCloud else { return nil }
+    guard let block = MemoryInjector.block(for: await store.all()) else { return nil }
+    return MemoryInjector.inject(block, into: body)
+  }
 
   /// Endpoints that name a model in their JSON body.
   static let modelBodyPaths: Set<String> = [
@@ -198,6 +225,8 @@ struct GatewayResponder: HTTPResponder {
         response = await mcp.handle(request)
       } else if path == "/localchat/info", request.method == .get {
         response = .json(["name": "LocalChat", "mcp": ["path": "/mcp", "tools": tools.all.map(\.name)]])
+      } else if path == MemoryAPI.prefix || path.hasPrefix(MemoryAPI.prefix + "/") {
+        response = await memory.handle(request, path: path)
       } else if path.hasPrefix(CloudSettingsAPI.prefix) {
         response = await settingsAPI.handle(request, path: path)
       } else {
@@ -227,14 +256,23 @@ struct GatewayResponder: HTTPResponder {
       } catch {
         return .jsonError(.contentTooLarge, type: "invalid_request_error", message: "Request body too large.")
       }
-      guard let json = (try? JSONSerialization.jsonObject(with: Data(body.readableBytesView))) as? [String: Any],
-        let model = json["model"] as? String, CloudModelID.isCloud(model)
-      else { return await proxy.forward(request, body: body) }
+      let json = (try? JSONSerialization.jsonObject(with: Data(body.readableBytesView))) as? [String: Any]
+      let isChat = path == "/v1/chat/completions" || path == "/chat/completions"
+      guard let json, let model = json["model"] as? String, CloudModelID.isCloud(model) else {
+        // Local model (or no model): pass through, with memories added to chat messages.
+        if isChat, let json, let withMemory = await withMemory(json, request: request, isCloud: false),
+          let data = try? JSONSerialization.data(withJSONObject: withMemory, options: .withoutEscapingSlashes)
+        {
+          return await proxy.forward(request, body: ByteBuffer(bytes: data))
+        }
+        return await proxy.forward(request, body: body)
+      }
       guard cloudAllowed else { return .cloudForbidden }
 
       switch path {
       case "/v1/chat/completions", "/chat/completions":
-        return await cloud.chat(body: json, modelID: model)
+        let withMemory = await withMemory(json, request: request, isCloud: true)
+        return await cloud.chat(body: withMemory ?? json, modelID: model)
       case "/models/load", "/models/unload":
         return cloud.resolve(model) == nil ? .unknownCloudModel(model) : .json(["success": true])
       default:

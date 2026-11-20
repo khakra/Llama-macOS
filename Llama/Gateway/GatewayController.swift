@@ -14,8 +14,9 @@ final class GatewayController {
   private let gateway: Gateway = {
     let gateway = Gateway(engine: { EngineEndpoint(port: EnginePort.current) }, version: AppInfo.shortVersion)
     gateway.setCloudSettingsBackend(AppCloudSettingsBackend())
-    // Tools offered over /mcp (docs/gateway.md, phase 3).
-    gateway.setTools([LocalchatInfoTool()])
+    // Memory (docs/memory.md), then the tools offered over /mcp.
+    MemorySetup.configure(gateway)
+    gateway.setTools([LocalchatInfoTool()] + MemorySetup.tools)
     return gateway
   }()
   private var running: GatewayConfiguration?
