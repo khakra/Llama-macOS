@@ -15,15 +15,30 @@ enum ProviderKeychain {
     ]
   }
 
-  static func key(for providerID: String) -> String? {
+  enum Read {
+    case found(String)
+    /// No key saved for this provider.
+    case missing
+    /// There is a key, but it couldn't be read: access denied, the "allow" prompt
+    /// dismissed or timed out, or the Keychain locked.
+    case failed(OSStatus)
+  }
+
+  static func read(_ providerID: String) -> Read {
     var query = query(providerID)
     query[kSecReturnData as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitOne
     var result: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-      let data = result as? Data
-    else { return nil }
-    return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    switch status {
+    case errSecSuccess:
+      guard let data = result as? Data, let key = String(data: data, encoding: .utf8) else { return .failed(status) }
+      return .found(key.trimmingCharacters(in: .whitespacesAndNewlines))
+    case errSecItemNotFound:
+      return .missing
+    default:
+      return .failed(status)
+    }
   }
 
   @discardableResult

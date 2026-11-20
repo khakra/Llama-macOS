@@ -1,5 +1,6 @@
 import Foundation
 import LocalchatGateway
+import os.log
 
 // FORK: localchat gateway. Which cloud providers are on (edited in the chat UI's Settings › Cloud) and which of their models
 // to show. Settings live in `defaults` (`cloudProviders`); keys in the Keychain.
@@ -16,9 +17,12 @@ final class CloudSettings: ObservableObject {
   private static let defaultsKey = "cloudProviders"
 
   @Published private(set) var stored: [String: Stored] = [:]
-  /// Keys read from the Keychain this session. Reading prompts the first time,
-  /// so each key is read once and then kept in memory.
+  /// Keys read from the Keychain this session. Reading may show macOS's "allow"
+  /// prompt, so a successful read (or a confirmed "no key") is kept in memory. A
+  /// failed read isn't, so the next use asks again instead of reporting no key
+  /// until the app restarts.
   private var keys: [String: String?] = [:]
+  private let logger = Logger(subsystem: Logging.subsystem, category: "CloudSettings")
 
   private init() {
     if let data = UserDefaults.standard.data(forKey: Self.defaultsKey),
@@ -41,9 +45,20 @@ final class CloudSettings: ObservableObject {
 
   func key(for preset: CloudProviderPreset) -> String? {
     if let cached = keys[preset.id] { return cached }
-    let key = ProviderKeychain.key(for: preset.id)
-    keys[preset.id] = key
-    return key
+    switch ProviderKeychain.read(preset.id) {
+    case .found(let key):
+      keys[preset.id] = key
+      // A retry after a failed read (e.g. the user allowed access in the prompt):
+      // the gateway didn't have this provider yet.
+      if !pushing { pushToGateway() }
+      return key
+    case .missing:
+      keys[preset.id] = .some(nil)
+      return nil
+    case .failed(let status):
+      logger.error("couldn't read the \(preset.id, privacy: .public) key from the Keychain (status \(status))")
+      return nil
+    }
   }
 
   /// Stores (or removes) the key. Returns false if the Keychain refused.
@@ -78,7 +93,11 @@ final class CloudSettings: ObservableObject {
     }
   }
 
+  private var pushing = false
+
   func pushToGateway() {
+    pushing = true
+    defer { pushing = false }
     GatewayController.shared.setCloudProviders(activeProviders())
   }
 
